@@ -10,7 +10,10 @@ touching a real database or network.
 
 from __future__ import annotations
 
+from django.conf import settings
+
 from probes import Evidence, probe_database, probe_github_token, probe_stripe_key
+from probes.simulate import simulate_database, simulate_github, simulate_stripe
 
 from ..models import ConfigKey
 from .crypto import decrypt
@@ -22,10 +25,23 @@ _ADAPTERS = {
     "github_token": probe_github_token,
 }
 
+# Offline/demo adapters that read self-describing signals without the network.
+_SIMULATED = {
+    "database_url": simulate_database,
+    "stripe_key": simulate_stripe,
+    "github_token": simulate_github,
+}
+
+
+def _active_adapters() -> dict:
+    if getattr(settings, "SIMULATE_PROBES", False):
+        return _SIMULATED
+    return _ADAPTERS
+
 
 def probe_key(key: ConfigKey, adapters: dict | None = None) -> Evidence:
     """Run the correct read-only probe for a key and return its Evidence."""
-    adapters = adapters or _ADAPTERS
+    adapters = adapters or _active_adapters()
     probe = adapters.get(key.kind)
     if probe is None:
         return Evidence(

@@ -164,6 +164,10 @@ QWEN_BASE_URL = env(
 )
 QWEN_MODEL = env("QWEN_MODEL", default="qwen-plus")
 
+# When true, probes run in simulation mode (derive evidence from self-describing
+# parts of a value, no network). Lets the full demo run with zero credentials.
+SIMULATE_PROBES = env.bool("SIMULATE_PROBES", default=True)
+
 
 # --- Secret vault --------------------------------------------------------
 # Probeable secret values are stored encrypted at rest (never plaintext) so a
