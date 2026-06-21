@@ -2,7 +2,7 @@
 
 from rest_framework import serializers
 
-from .models import ConfigKey, Intent, Run, UsageSite
+from .models import ConfigKey, Finding, Intent, Run, UsageSite
 
 
 class UsageSiteSerializer(serializers.ModelSerializer):
@@ -25,10 +25,32 @@ class IntentSerializer(serializers.ModelSerializer):
         ]
 
 
+class FindingSerializer(serializers.ModelSerializer):
+    key_name = serializers.CharField(source="config_key.name", read_only=True)
+    kind = serializers.CharField(source="config_key.kind", read_only=True)
+
+    class Meta:
+        model = Finding
+        fields = [
+            "id",
+            "key_name",
+            "kind",
+            "classification",
+            "expected",
+            "reality",
+            "evidence",
+            "blast_radius",
+            "proposed_fix",
+            "confidence",
+            "resolved",
+        ]
+
+
 class ConfigKeySerializer(serializers.ModelSerializer):
     usage_sites = UsageSiteSerializer(many=True, read_only=True)
     usage_count = serializers.IntegerField(source="usage_sites.count", read_only=True)
     intent = IntentSerializer(read_only=True)
+    finding = FindingSerializer(read_only=True)
 
     class Meta:
         model = ConfigKey
@@ -43,12 +65,14 @@ class ConfigKeySerializer(serializers.ModelSerializer):
             "usage_count",
             "usage_sites",
             "intent",
+            "finding",
         ]
 
 
 class RunSerializer(serializers.ModelSerializer):
     keys = ConfigKeySerializer(many=True, read_only=True)
     key_count = serializers.IntegerField(source="keys.count", read_only=True)
+    findings_summary = serializers.SerializerMethodField()
 
     class Meta:
         model = Run
@@ -61,8 +85,15 @@ class RunSerializer(serializers.ModelSerializer):
             "target_environment",
             "config_format",
             "key_count",
+            "findings_summary",
             "keys",
         ]
+
+    def get_findings_summary(self, run):
+        summary = {"correct": 0, "suspect": 0, "silently_wrong": 0}
+        for f in run.findings.all():
+            summary[f.classification] = summary.get(f.classification, 0) + 1
+        return summary
 
 
 class RunCreateSerializer(serializers.Serializer):

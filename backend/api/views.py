@@ -14,6 +14,7 @@ from .models import Run
 from .serializers import RunCreateSerializer, RunSerializer
 from .services.ingest import ingest_run
 from .services.intent import infer_run_intents
+from .services.orchestrator import run_probes
 from .services.qwen_client import QwenNotConfigured
 
 
@@ -66,5 +67,13 @@ class RunViewSet(viewsets.ModelViewSet):
             return Response(
                 {"detail": str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE
             )
+        run.refresh_from_db()
+        return Response(RunSerializer(run).data)
+
+    @action(detail=True, methods=["post"])
+    def probe(self, request, pk=None):
+        """Probe every probeable key (read-only) and classify intent vs reality."""
+        run = self.get_object()
+        run_probes(run)
         run.refresh_from_db()
         return Response(RunSerializer(run).data)
