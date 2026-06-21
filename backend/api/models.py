@@ -94,6 +94,35 @@ class UsageSite(models.Model):
         return f"{self.file_path}:{self.line_number}"
 
 
+class Intent(models.Model):
+    """What a config value is *supposed* to be, inferred by Qwen from usage.
+
+    This is the "intent" half of the product — grounded in how the key is used
+    in the codebase, not the value itself. The "reality" half (a probe result)
+    is compared against this in Phase 4 to produce a Finding.
+    """
+
+    config_key = models.OneToOneField(
+        ConfigKey, related_name="intent", on_delete=models.CASCADE
+    )
+    # The environment the value should belong to, given how it's used.
+    expected_environment = models.CharField(max_length=32, default="any")
+    # Structured expectations, e.g. {"stripe_mode": "live"} or {"db_role": "prod"}.
+    expected_properties = models.JSONField(default=dict, blank=True)
+    # Short phrase: what this value gates / controls.
+    gates = models.CharField(max_length=255, blank=True)
+    # One-sentence grounded reasoning (also the text streamed to the UI).
+    rationale = models.TextField(blank=True)
+    confidence = models.FloatField(default=0.0)
+    grounded = models.BooleanField(default=False)  # was there real usage to ground on?
+    model = models.CharField(max_length=64, blank=True)
+    raw_response = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Intent({self.config_key.name} -> {self.expected_environment})"
+
+
 class Finding(models.Model):
     """The verdict for one key after intent vs. reality is compared (Phase 4)."""
 
