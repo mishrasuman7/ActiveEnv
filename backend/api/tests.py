@@ -331,3 +331,76 @@ def test_probe_endpoint_returns_findings(client, monkeypatch):
     assert data["findings_summary"]["silently_wrong"] == 1
     # plaintext secret never appears in the response
     assert "sk_test_51AbCdEf" not in resp.content.decode()
+
+
+# --- HITL fix + green loop (Phase 5) ------------------------------------
+
+def _stripe_by_value(v):
+    """Fake Stripe probe whose verdict follows the actual value (live vs test)."""
+    live = v.startswith("sk_live_")
+    mode = "live" if live else "test"
+    return _ev("stripe_key", {"claimed_mode": mode, "livemode": live, "actual_mode": mode})
+
+
+@pytest.mark.django_db
+def test_apply_fix_turns_finding_green_and_undo_reverts(monkeypatch):
+    from api.models import Run
+    from api.services.fixer import apply_fix, undo_fix
+    from api.services.ingest import ingest_run
+    from api.services.orchestrator import run_probes
+
+    monkeypatch.setattr("api.services.prober._ADAPTERS", {"stripe_key": _stripe_by_value})
+
+    run = Run.objects.create(target_environment="production")
+    ingest_run(run, "STRIPE_SECRET_KEY=sk_test_51AbCdEf\n", files={})
+    run_probes(run)
+    finding = run.findings.get()
+    assert finding.classification == "silently_wrong"  # test key in prod
+
+    # Human approves a corrected live key -> re-probe -> green.
+    finding = apply_fix(finding, "sk_live_99RealLiveKey")
+    assert finding.classification == "correct"
+    assert finding.resolved is True
+    key = finding.config_key
+    key.refresh_from_db()
+    assert key.masked_value.startswith("sk_live_")  # value actually swapped
+
+    # Undo -> back to the broken test key -> red again.
+    fix = finding.fixes.get()
+    finding = undo_fix(fix)
+    assert finding.classification == "silently_wrong"
+    fix.refresh_from_db()
+    assert fix.undone is True
+
+
+@pytest.mark.django_db
+def test_approve_endpoint_requires_corrected_value_and_logs_audit(client, monkeypatch):
+    from api.models import Run
+    from api.services.ingest import ingest_run
+    from api.services.orchestrator import run_probes
+
+    monkeypatch.setattr("api.services.prober._ADAPTERS", {"stripe_key": _stripe_by_value})
+
+    run = Run.objects.create(target_environment="production")
+    ingest_run(run, "STRIPE_SECRET_KEY=sk_test_51AbCdEf\n", files={})
+    run_probes(run)
+    finding = run.findings.get()
+
+    # Approval gate: missing corrected_value is rejected (nothing applied).
+    bad = client.post(f"/api/findings/{finding.id}/approve/", data={}, content_type="application/json")
+    assert bad.status_code == 400
+
+    # Approve with a corrected value -> green.
+    ok = client.post(
+        f"/api/findings/{finding.id}/approve/",
+        data=json.dumps({"corrected_value": "sk_live_99RealLiveKey"}),
+        content_type="application/json",
+    )
+    assert ok.status_code == 200
+    assert ok.json()["classification"] == "correct"
+
+    # Audit log records the apply + reprobe and never leaks the secret.
+    detail = client.get(f"/api/runs/{run.id}/").json()
+    actions = [a["action"] for a in detail["audit"]]
+    assert "apply_fix" in actions and "reprobe" in actions
+    assert "sk_live_99RealLiveKey" not in client.get(f"/api/runs/{run.id}/").content.decode()
