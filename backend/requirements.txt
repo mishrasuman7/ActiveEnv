@@ -1,0 +1,24 @@
+# --- Core web ---
+Django==5.1.4
+djangorestframework==3.15.2
+django-cors-headers==4.6.0
+django-environ==0.11.2
+gunicorn==23.0.0
+
+# --- Database ---
+psycopg[binary]==3.2.3
+
+# --- Async / scheduling ---
+celery==5.4.0
+redis==5.2.1
+
+# --- LLM (Qwen via Model Studio, OpenAI-compatible) ---
+openai==1.59.6
+
+# --- Probe adapters (read-only) ---
+httpx==0.28.1
+stripe==11.4.1
+
+# --- Dev / test ---
+pytest==8.3.4
+pytest-django==4.9.0
