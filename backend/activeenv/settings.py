@@ -46,6 +46,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "corsheaders.middleware.CorsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
@@ -123,9 +124,32 @@ USE_TZ = True
 
 
 # --- Static --------------------------------------------------------------
+# WhiteNoise serves admin/DRF static assets in production (no separate web
+# server needed). collectstatic writes them to STATIC_ROOT at image build.
 
 STATIC_URL = "static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedStaticFilesStorage",
+    },
+}
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+
+# --- Production hardening ------------------------------------------------
+# Non-breaking when DEBUG: only tightens once DEBUG=False (i.e. on ECS).
+# CSRF_TRUSTED_ORIGINS must list the public frontend/API origins in prod.
+
+CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[])
+
+if not DEBUG:
+    # ECS sits behind a load balancer / reverse proxy terminating TLS.
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    SESSION_COOKIE_SECURE = env.bool("SECURE_COOKIES", default=False)
+    CSRF_COOKIE_SECURE = env.bool("SECURE_COOKIES", default=False)
+    SECURE_CONTENT_TYPE_NOSNIFF = True
 
 
 # --- Django REST Framework ----------------------------------------------
