@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 680 404" role="img" font-family="ui-sans-serif, system-ui, -apple-system, Segoe UI, sans-serif">
+  <title>ActiveEnv architecture</title>
+  <desc>The Next.js UI on Vercel calls the Django REST API on Alibaba Cloud ECS, which runs a five-stage verification pipeline (Observe, Infer, Probe, Classify, Approve). The pipeline depends on Qwen Model Studio for intent, read-only probes against target systems, Postgres with an encrypted vault for storage, and Redis with a Celery worker for async re-probing.</desc>
+
+  <defs>
+    <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#94a3b8"/>
+    </marker>
+  </defs>
+
+  <text x="40" y="26" font-size="16" font-weight="700" fill="#0d9488">ActiveEnv — architecture</text>
+
+  <!-- Client -->
+  <rect x="250" y="44" width="180" height="46" rx="10" fill="#1e3a5f"/>
+  <text x="340" y="68" text-anchor="middle" font-size="13" font-weight="700" fill="#ffffff">Next.js UI</text>
+  <text x="340" y="83" text-anchor="middle" font-size="10" fill="#cbd5e1">Vercel</text>
+
+  <line x1="340" y1="90" x2="340" y2="110" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#ah)"/>
+
+  <!-- API -->
+  <rect x="80" y="112" width="520" height="46" rx="10" fill="#0f766e"/>
+  <text x="340" y="135" text-anchor="middle" font-size="13" font-weight="700" fill="#ffffff">Django REST API · gunicorn</text>
+  <text x="340" y="151" text-anchor="middle" font-size="10" fill="#bae6e0">Alibaba Cloud ECS</text>
+
+  <line x1="340" y1="158" x2="340" y2="184" stroke="#94a3b8" stroke-width="1.5" marker-end="url(#ah)"/>
+
+  <text x="66" y="180" font-size="11" fill="#64748b">Verification pipeline</text>
+
+  <!-- Pipeline steps -->
+  <g font-size="13" font-weight="700" fill="#ffffff">
+    <rect x="66"  y="190" width="100" height="64" rx="10" fill="#0d9488"/>
+    <rect x="181" y="190" width="100" height="64" rx="10" fill="#0d9488"/>
+    <rect x="296" y="190" width="100" height="64" rx="10" fill="#0d9488"/>
+    <rect x="411" y="190" width="100" height="64" rx="10" fill="#0d9488"/>
+    <rect x="526" y="190" width="100" height="64" rx="10" fill="#059669"/>
+    <text x="116" y="220" text-anchor="middle">Observe</text>
+    <text x="231" y="220" text-anchor="middle">Infer</text>
+    <text x="346" y="220" text-anchor="middle">Probe</text>
+    <text x="461" y="220" text-anchor="middle">Classify</text>
+    <text x="576" y="220" text-anchor="middle">Approve</text>
+  </g>
+  <g font-size="10" fill="#d1fae5">
+    <text x="116" y="238" text-anchor="middle">parse · usage</text>
+    <text x="231" y="238" text-anchor="middle">intent · LLM</text>
+    <text x="346" y="238" text-anchor="middle">read-only</text>
+    <text x="461" y="238" text-anchor="middle">deterministic</text>
+    <text x="576" y="238" text-anchor="middle">HITL · undo</text>
+  </g>
+
+  <!-- step -> step arrows -->
+  <g stroke="#94a3b8" stroke-width="1.5" marker-end="url(#ah)">
+    <line x1="166" y1="222" x2="180" y2="222"/>
+    <line x1="281" y1="222" x2="295" y2="222"/>
+    <line x1="396" y1="222" x2="410" y2="222"/>
+    <line x1="511" y1="222" x2="525" y2="222"/>
+  </g>
+
+  <!-- step -> dependency arrows -->
+  <g stroke="#94a3b8" stroke-width="1.5" marker-end="url(#ah)">
+    <line x1="231" y1="254" x2="231" y2="298"/>
+    <line x1="346" y1="254" x2="346" y2="298"/>
+    <line x1="461" y1="254" x2="461" y2="298"/>
+    <line x1="576" y1="254" x2="576" y2="298"/>
+  </g>
+
+  <!-- Dependencies -->
+  <g font-size="12" font-weight="700" fill="#ffffff">
+    <rect x="181" y="300" width="100" height="64" rx="10" fill="#475569"/>
+    <rect x="296" y="300" width="100" height="64" rx="10" fill="#475569"/>
+    <rect x="411" y="300" width="100" height="64" rx="10" fill="#475569"/>
+    <rect x="526" y="300" width="100" height="64" rx="10" fill="#475569"/>
+    <text x="231" y="328" text-anchor="middle">Qwen</text>
+    <text x="346" y="328" text-anchor="middle">Targets</text>
+    <text x="461" y="328" text-anchor="middle">Postgres</text>
+    <text x="576" y="328" text-anchor="middle">Redis</text>
+  </g>
+  <g font-size="10" fill="#cbd5e1">
+    <text x="231" y="346" text-anchor="middle">Model Studio</text>
+    <text x="346" y="346" text-anchor="middle">DB·Stripe·GitHub</text>
+    <text x="461" y="346" text-anchor="middle">+ vault (enc.)</text>
+    <text x="576" y="346" text-anchor="middle">Celery worker</text>
+  </g>
+
+  <!-- legend -->
+  <g font-size="10" fill="#64748b">
+    <rect x="66" y="382" width="11" height="11" rx="2" fill="#0d9488"/>
+    <text x="82" y="391">verification path</text>
+    <rect x="186" y="382" width="11" height="11" rx="2" fill="#059669"/>
+    <text x="202" y="391">human approval</text>
+    <rect x="312" y="382" width="11" height="11" rx="2" fill="#475569"/>
+    <text x="328" y="391">dependencies (targets are read-only)</text>
+  </g>
+</svg>
