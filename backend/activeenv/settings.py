@@ -5,6 +5,8 @@ Configuration is environment-driven (see .env.example at the repo root) so the
 same code runs locally and on Alibaba Cloud ECS without edits.
 """
 
+import os
+import sys
 from pathlib import Path
 
 import environ
@@ -13,10 +15,13 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 # --- Environment ---------------------------------------------------------
 # Reads from process env; falls back to ../.env (repo root) during local dev.
+# Under pytest we skip the .env file so the suite is hermetic and relies only on
+# the in-memory SQLite config set in conftest.py.
 env = environ.Env(
     DJANGO_DEBUG=(bool, False),
 )
-environ.Env.read_env(BASE_DIR.parent / ".env")
+if "pytest" not in sys.modules:
+    environ.Env.read_env(BASE_DIR.parent / ".env")
 
 SECRET_KEY = env("DJANGO_SECRET_KEY", default="dev-insecure-change-me")
 DEBUG = env.bool("DJANGO_DEBUG", default=True)

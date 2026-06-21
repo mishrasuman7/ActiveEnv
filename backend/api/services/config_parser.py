@@ -73,12 +73,15 @@ def _parse_env(text: str) -> list[ParsedKey]:
         m = _DOTENV_LINE.match(line)
         if not m:
             continue
-        name, value = m.group(1), m.group(2)
-        # Strip surrounding quotes and inline comments on unquoted values.
-        if value and value[0] in "\"'" and value[-1:] == value[0]:
-            value = value[1:-1]
+        name, raw = m.group(1), m.group(2)
+        if raw[:1] in ("'", '"'):
+            # Quoted: take up to the matching closing quote; ignore trailing comment.
+            quote = raw[0]
+            end = raw.find(quote, 1)
+            value = raw[1:end] if end != -1 else raw[1:]
         else:
-            value = value.split(" #", 1)[0].strip()
+            # Unquoted: strip an inline " # comment", then surrounding whitespace.
+            value = re.sub(r"\s+#.*$", "", raw).strip()
         keys.append(ParsedKey(name, value))
     return keys
 
