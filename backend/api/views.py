@@ -6,13 +6,15 @@
 """
 
 from django.conf import settings
-from rest_framework import viewsets
-from rest_framework.decorators import api_view
+from rest_framework import status, viewsets
+from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
 
 from .models import Run
 from .serializers import RunCreateSerializer, RunSerializer
 from .services.ingest import ingest_run
+from .services.intent import infer_run_intents
+from .services.qwen_client import QwenNotConfigured
 
 
 @api_view(["GET"])
@@ -53,3 +55,16 @@ class RunViewSet(viewsets.ModelViewSet):
         )
         run.refresh_from_db()
         return Response(RunSerializer(run).data, status=201)
+
+    @action(detail=True, methods=["post"])
+    def infer(self, request, pk=None):
+        """Run Qwen intent inference over every key on this run."""
+        run = self.get_object()
+        try:
+            infer_run_intents(run)
+        except QwenNotConfigured as exc:
+            return Response(
+                {"detail": str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE
+            )
+        run.refresh_from_db()
+        return Response(RunSerializer(run).data)

@@ -2,7 +2,7 @@
 
 from rest_framework import serializers
 
-from .models import ConfigKey, Run, UsageSite
+from .models import ConfigKey, Intent, Run, UsageSite
 
 
 class UsageSiteSerializer(serializers.ModelSerializer):
@@ -11,9 +11,24 @@ class UsageSiteSerializer(serializers.ModelSerializer):
         fields = ["file_path", "line_number", "usage_kind", "snippet"]
 
 
+class IntentSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Intent
+        fields = [
+            "expected_environment",
+            "expected_properties",
+            "gates",
+            "rationale",
+            "confidence",
+            "grounded",
+            "model",
+        ]
+
+
 class ConfigKeySerializer(serializers.ModelSerializer):
     usage_sites = UsageSiteSerializer(many=True, read_only=True)
     usage_count = serializers.IntegerField(source="usage_sites.count", read_only=True)
+    intent = IntentSerializer(read_only=True)
 
     class Meta:
         model = ConfigKey
@@ -27,6 +42,7 @@ class ConfigKeySerializer(serializers.ModelSerializer):
             "is_probeable",
             "usage_count",
             "usage_sites",
+            "intent",
         ]
 
 
