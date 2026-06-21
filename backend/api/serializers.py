@@ -40,6 +40,7 @@ class IntentSerializer(serializers.ModelSerializer):
 class FindingSerializer(serializers.ModelSerializer):
     key_name = serializers.CharField(source="config_key.name", read_only=True)
     kind = serializers.CharField(source="config_key.kind", read_only=True)
+    fixed = serializers.SerializerMethodField()
 
     class Meta:
         model = Finding
@@ -55,7 +56,11 @@ class FindingSerializer(serializers.ModelSerializer):
             "proposed_fix",
             "confidence",
             "resolved",
+            "fixed",
         ]
+
+    def get_fixed(self, finding):
+        return finding.fixes.filter(undone=False).exists()
 
 
 class ConfigKeySerializer(serializers.ModelSerializer):
