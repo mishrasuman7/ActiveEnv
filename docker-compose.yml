@@ -1,0 +1,38 @@
+# ActiveEnv — local infra: Postgres (app datastore) + Redis (Celery broker).
+# Backend and frontend run on the host during dev; this file provides the two
+# stateful services. Production uses the same images on Alibaba Cloud ECS.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: activeenv-postgres
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-activeenv}
+      POSTGRES_USER: ${POSTGRES_USER:-activeenv}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-activeenv}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-activeenv}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: activeenv-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pgdata:
+  redisdata:
