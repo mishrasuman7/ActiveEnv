@@ -22,6 +22,9 @@ openai==1.59.6
 httpx==0.28.1
 stripe==11.4.1
 
+# --- Agent <-> tools (MCP); probe logic in backend/probes, server in mcp_server ---
+mcp>=1.2.0
+
 # --- Dev / test ---
 pytest==8.3.4
 pytest-django==4.9.0

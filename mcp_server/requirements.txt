@@ -1,0 +1,5 @@
+# config-probe-mcp server dependencies.
+# The probe logic lives in ../backend/probes and uses these at runtime.
+mcp>=1.2.0
+httpx==0.28.1
+psycopg[binary]==3.2.3
