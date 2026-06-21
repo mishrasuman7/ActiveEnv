@@ -66,6 +66,9 @@ class ConfigKey(models.Model):
     kind = models.CharField(max_length=24, choices=Kind.choices, default=Kind.UNKNOWN)
     is_secret = models.BooleanField(default=True)
     is_probeable = models.BooleanField(default=False)
+    # Fernet-encrypted real value, kept only for probeable keys so a probe /
+    # re-probe can use it. Never returned by the API. Empty for non-probeable.
+    secret_ciphertext = models.TextField(blank=True, default="")
 
     class Meta:
         ordering = ["name"]

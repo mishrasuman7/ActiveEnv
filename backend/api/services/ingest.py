@@ -12,6 +12,7 @@ from django.db import transaction
 
 from ..models import AuditEntry, ConfigKey, Run, UsageSite
 from .config_parser import parse_config
+from .crypto import encrypt
 from .masking import mask_value
 from .usage_locator import locate_usages
 
@@ -43,6 +44,8 @@ def ingest_run(
             kind=m.kind,
             is_secret=m.is_secret,
             is_probeable=m.is_probeable,
+            # Vault the real value only for keys we can actually probe.
+            secret_ciphertext=encrypt(p.value) if m.is_probeable else "",
         )
         sites = [
             UsageSite(

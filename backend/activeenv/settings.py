@@ -163,3 +163,19 @@ QWEN_BASE_URL = env(
     default="https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
 )
 QWEN_MODEL = env("QWEN_MODEL", default="qwen-plus")
+
+
+# --- Secret vault --------------------------------------------------------
+# Probeable secret values are stored encrypted at rest (never plaintext) so a
+# probe / re-probe can use them. Uses ACTIVEENV_ENCRYPTION_KEY if provided
+# (a urlsafe-base64 Fernet key), otherwise derives one from SECRET_KEY for dev.
+
+import base64 as _base64  # noqa: E402
+import hashlib as _hashlib  # noqa: E402
+
+_vault_key = env("ACTIVEENV_ENCRYPTION_KEY", default="")
+if not _vault_key:
+    _vault_key = _base64.urlsafe_b64encode(
+        _hashlib.sha256(SECRET_KEY.encode()).digest()
+    ).decode()
+SECRET_VAULT_KEY = _vault_key
