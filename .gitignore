@@ -15,6 +15,7 @@ venv/
 .mypy_cache/
 *.sqlite3
 celerybeat-schedule*
+staticfiles/
 
 # --- Node / Next.js ---
 node_modules/

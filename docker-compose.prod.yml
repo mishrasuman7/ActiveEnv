@@ -1,0 +1,89 @@
+# ActiveEnv — production stack for Alibaba Cloud ECS.
+#
+#   docker compose -f docker-compose.prod.yml --env-file .env up -d --build
+#
+# Brings up Postgres, Redis, the Django API (gunicorn), and the Celery worker.
+# Host/port-dependent vars (DB + Redis) are pinned to the compose service names
+# here, so they win over whatever is in .env. Secrets/keys come from .env.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: activeenv-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-activeenv}
+      POSTGRES_USER: ${POSTGRES_USER:-activeenv}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-activeenv}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-activeenv}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: activeenv-redis
+    restart: unless-stopped
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # One-shot: apply migrations before the app starts serving.
+  migrate:
+    build: ./backend
+    image: activeenv-backend:latest
+    command: python manage.py migrate --noinput
+    env_file: .env
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-activeenv}:${POSTGRES_PASSWORD:-activeenv}@postgres:5432/${POSTGRES_DB:-activeenv}
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  web:
+    image: activeenv-backend:latest
+    container_name: activeenv-web
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DJANGO_DEBUG: "False"
+      DATABASE_URL: postgres://${POSTGRES_USER:-activeenv}:${POSTGRES_PASSWORD:-activeenv}@postgres:5432/${POSTGRES_DB:-activeenv}
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  worker:
+    image: activeenv-backend:latest
+    container_name: activeenv-worker
+    restart: unless-stopped
+    command: celery -A activeenv worker -l info
+    env_file: .env
+    environment:
+      DJANGO_DEBUG: "False"
+      DATABASE_URL: postgres://${POSTGRES_USER:-activeenv}:${POSTGRES_PASSWORD:-activeenv}@postgres:5432/${POSTGRES_DB:-activeenv}
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+volumes:
+  pgdata:
+  redisdata:
