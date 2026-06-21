@@ -158,6 +158,32 @@ class Finding(models.Model):
         return f"{self.config_key.name}: {self.classification}"
 
 
+class Fix(models.Model):
+    """A human-approved fix applied to a key, with everything needed to undo it.
+
+    The previous state (including the encrypted old value) is snapshotted so any
+    fix can be reverted and the key re-probed back to its prior verdict.
+    """
+
+    run = models.ForeignKey(Run, related_name="fixes", on_delete=models.CASCADE)
+    finding = models.ForeignKey(Finding, related_name="fixes", on_delete=models.CASCADE)
+    config_key = models.ForeignKey(
+        ConfigKey, related_name="fixes", on_delete=models.CASCADE
+    )
+    # Snapshot to restore on undo: {ciphertext, masked, hint, kind, is_probeable}.
+    previous_state = models.JSONField(default=dict)
+    new_masked = models.CharField(max_length=512, blank=True)
+    rationale = models.TextField(blank=True)
+    undone = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Fix({self.config_key.name}{', undone' if self.undone else ''})"
+
+
 class AuditEntry(models.Model):
     """Append-only log of every inference, probe, fix, and undo on a run."""
 
