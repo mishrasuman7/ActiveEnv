@@ -205,3 +205,129 @@ def test_infer_endpoint_runs_with_injected_client(client, monkeypatch):
     intent = data["keys"][0]["intent"]
     assert intent["expected_environment"] == "production"
     assert intent["confidence"] == 0.8
+
+
+# --- crypto + orchestration + classification (Phase 4) -------------------
+
+def _ev(probe, observed, *, ok=True, reachable=True):
+    from probes import Evidence
+
+    return Evidence(probe, ok, reachable, observed, "summary", "masked")
+
+
+@pytest.mark.django_db
+def test_probeable_secret_is_vaulted_not_plaintext():
+    from api.models import Run
+    from api.services.crypto import decrypt
+    from api.services.ingest import ingest_run
+
+    run = Run.objects.create(target_environment="production")
+    ingest_run(run, "STRIPE_SECRET_KEY=sk_test_51AbCdEf\nDJANGO_DEBUG=true\n", files={})
+    stripe = run.keys.get(name="STRIPE_SECRET_KEY")
+    debug = run.keys.get(name="DJANGO_DEBUG")
+
+    assert stripe.secret_ciphertext  # vaulted
+    assert "sk_test_51AbCdEf" not in stripe.secret_ciphertext  # not plaintext
+    assert decrypt(stripe.secret_ciphertext) == "sk_test_51AbCdEf"  # recoverable
+    assert debug.secret_ciphertext == ""  # non-probeable not vaulted
+
+
+@pytest.mark.django_db
+def test_run_probes_flags_test_key_and_staging_db_in_prod():
+    from api.models import Run
+    from api.services.ingest import ingest_run
+    from api.services.orchestrator import run_probes
+
+    run = Run.objects.create(target_environment="production")
+    ingest_run(
+        run,
+        "STRIPE_SECRET_KEY=sk_test_51AbCdEf\n"
+        "DATABASE_URL=postgres://u:p@staging-db:5432/app\n",
+        files={},
+    )
+    adapters = {
+        "stripe_key": lambda v: _ev(
+            "stripe_key",
+            {"claimed_mode": "test", "livemode": False, "actual_mode": "test"},
+        ),
+        "database_url": lambda v: _ev(
+            "database",
+            {"connect_host": "staging-db", "current_database": "app_staging"},
+        ),
+    }
+    run_probes(run, adapters=adapters)
+
+    findings = {f.config_key.name: f for f in run.findings.all()}
+    assert findings["STRIPE_SECRET_KEY"].classification == "silently_wrong"
+    assert "live" in findings["STRIPE_SECRET_KEY"].proposed_fix
+    assert findings["DATABASE_URL"].classification == "silently_wrong"
+    run.refresh_from_db()
+    assert run.status == "probed"
+
+
+@pytest.mark.django_db
+def test_correct_config_is_not_flagged():
+    from api.models import Run
+    from api.services.ingest import ingest_run
+    from api.services.orchestrator import run_probes
+
+    run = Run.objects.create(target_environment="production")
+    ingest_run(
+        run,
+        "STRIPE_SECRET_KEY=sk_live_51AbCdEf\n"
+        "DATABASE_URL=postgres://u:p@prod-db:5432/app\n",
+        files={},
+    )
+    adapters = {
+        "stripe_key": lambda v: _ev(
+            "stripe_key",
+            {"claimed_mode": "live", "livemode": True, "actual_mode": "live"},
+        ),
+        "database_url": lambda v: _ev(
+            "database", {"connect_host": "prod-db", "current_database": "app"}
+        ),
+    }
+    run_probes(run, adapters=adapters)
+    assert all(f.classification == "correct" for f in run.findings.all())
+
+
+@pytest.mark.django_db
+def test_unreachable_probe_is_suspect_not_wrong():
+    from api.models import Run
+    from api.services.ingest import ingest_run
+    from api.services.orchestrator import run_probes
+
+    run = Run.objects.create(target_environment="production")
+    ingest_run(run, "STRIPE_SECRET_KEY=sk_test_51AbCdEf\n", files={})
+    adapters = {
+        "stripe_key": lambda v: _ev("stripe_key", {}, ok=False, reachable=False),
+    }
+    run_probes(run, adapters=adapters)
+    f = run.findings.get()
+    assert f.classification == "suspect"  # never assert "wrong" without evidence
+
+
+@pytest.mark.django_db
+def test_probe_endpoint_returns_findings(client, monkeypatch):
+    from api.models import Run
+    from api.services.ingest import ingest_run
+
+    monkeypatch.setattr(
+        "api.services.prober._ADAPTERS",
+        {
+            "stripe_key": lambda v: _ev(
+                "stripe_key",
+                {"claimed_mode": "test", "livemode": False, "actual_mode": "test"},
+            ),
+        },
+    )
+    run = Run.objects.create(target_environment="production")
+    ingest_run(run, "STRIPE_SECRET_KEY=sk_test_51AbCdEf\n", files={})
+
+    resp = client.post(f"/api/runs/{run.id}/probe/")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["status"] == "probed"
+    assert data["findings_summary"]["silently_wrong"] == 1
+    # plaintext secret never appears in the response
+    assert "sk_test_51AbCdEf" not in resp.content.decode()
