@@ -2,7 +2,19 @@
 
 from rest_framework import serializers
 
-from .models import ConfigKey, Finding, Intent, Run, UsageSite
+from .models import AuditEntry, ConfigKey, Finding, Intent, Run, UsageSite
+
+
+class AuditEntrySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AuditEntry
+        fields = ["id", "action", "detail", "undone", "created_at"]
+
+
+class FixApproveSerializer(serializers.Serializer):
+    """Input for approving a fix — the corrected value the human supplies."""
+
+    corrected_value = serializers.CharField(trim_whitespace=False)
 
 
 class UsageSiteSerializer(serializers.ModelSerializer):
@@ -94,6 +106,15 @@ class RunSerializer(serializers.ModelSerializer):
         for f in run.findings.all():
             summary[f.classification] = summary.get(f.classification, 0) + 1
         return summary
+
+
+class RunDetailSerializer(RunSerializer):
+    """Run with the full audit log — used on the detail/action responses."""
+
+    audit = AuditEntrySerializer(many=True, read_only=True)
+
+    class Meta(RunSerializer.Meta):
+        fields = RunSerializer.Meta.fields + ["audit"]
 
 
 class RunCreateSerializer(serializers.Serializer):

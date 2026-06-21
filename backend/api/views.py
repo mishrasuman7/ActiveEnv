@@ -10,8 +10,15 @@ from rest_framework import status, viewsets
 from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
 
-from .models import Run
-from .serializers import RunCreateSerializer, RunSerializer
+from .models import Finding, Run
+from .serializers import (
+    FindingSerializer,
+    FixApproveSerializer,
+    RunCreateSerializer,
+    RunDetailSerializer,
+    RunSerializer,
+)
+from .services.fixer import apply_fix, undo_fix
 from .services.ingest import ingest_run
 from .services.intent import infer_run_intents
 from .services.orchestrator import run_probes
@@ -57,6 +64,10 @@ class RunViewSet(viewsets.ModelViewSet):
         run.refresh_from_db()
         return Response(RunSerializer(run).data, status=201)
 
+    def retrieve(self, request, *args, **kwargs):
+        run = self.get_object()
+        return Response(RunDetailSerializer(run).data)
+
     @action(detail=True, methods=["post"])
     def infer(self, request, pk=None):
         """Run Qwen intent inference over every key on this run."""
@@ -68,7 +79,7 @@ class RunViewSet(viewsets.ModelViewSet):
                 {"detail": str(exc)}, status=status.HTTP_503_SERVICE_UNAVAILABLE
             )
         run.refresh_from_db()
-        return Response(RunSerializer(run).data)
+        return Response(RunDetailSerializer(run).data)
 
     @action(detail=True, methods=["post"])
     def probe(self, request, pk=None):
@@ -76,4 +87,33 @@ class RunViewSet(viewsets.ModelViewSet):
         run = self.get_object()
         run_probes(run)
         run.refresh_from_db()
-        return Response(RunSerializer(run).data)
+        return Response(RunDetailSerializer(run).data)
+
+
+class FindingViewSet(viewsets.GenericViewSet):
+    """Human-in-the-loop actions on a finding: approve a fix, or undo it."""
+
+    queryset = Finding.objects.select_related("config_key", "run")
+    serializer_class = FindingSerializer
+
+    @action(detail=True, methods=["post"])
+    def approve(self, request, pk=None):
+        """Apply a human-approved corrected value, then re-probe to confirm green."""
+        finding = self.get_object()
+        payload = FixApproveSerializer(data=request.data)
+        payload.is_valid(raise_exception=True)
+        finding = apply_fix(finding, payload.validated_data["corrected_value"])
+        return Response(FindingSerializer(finding).data)
+
+    @action(detail=True, methods=["post"])
+    def undo(self, request, pk=None):
+        """Revert the most recent applied fix on this finding and re-probe."""
+        finding = self.get_object()
+        fix = finding.fixes.filter(undone=False).order_by("-created_at").first()
+        if fix is None:
+            return Response(
+                {"detail": "no applied fix to undo"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        finding = undo_fix(fix)
+        return Response(FindingSerializer(finding).data)

@@ -7,6 +7,7 @@ from . import views
 
 router = DefaultRouter()
 router.register(r"runs", views.RunViewSet, basename="run")
+router.register(r"findings", views.FindingViewSet, basename="finding")
 
 urlpatterns = [
     path("health/", views.health, name="health"),
